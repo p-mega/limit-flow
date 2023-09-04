@@ -10,7 +10,7 @@ import (
 func main() {
 	router := gin.Default()
 	router.Use(filter.GinLimitFlow(2*1000, 10, 300*1000))
-	router.GET("/", func(c *gin.Context) {
+	router.GET("/hello", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello World")
 	})
 	router.Run(":8000")

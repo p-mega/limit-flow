@@ -2,7 +2,6 @@ package filter
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -27,18 +26,8 @@ LIMITED_TIME_MILLIS: 默认限制时间（单位：ms）3600000,3600(s)
 */
 func GinLimitFlow(MIN_SAFE_TIME, LIMIT_NUMBER, LIMITED_TIME_MILLIS int64) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if IsNotIllegalRequest(ctx.Request) {
-			log.Println("have a illegal request")
-			ctx.String(500, "request is not illegal")
-			ctx.Abort()
-		}
 		filterLimitedIpMap()
-		ip, err := utils.GetRemoteIP(ctx.Request)
-		if err != nil {
-			log.Println("request ip not found")
-			ctx.String(500, "ip not found")
-			ctx.Abort()
-		}
+		ip := utils.GetRealIp(ctx.Request)
 		if isLimitedIP(ip) {
 			if limitedTime, ok := limitedIpMap.Load(ip); ok {
 				limitedTime = limitedTime.(int64) - time.Now().UnixMicro()
@@ -48,6 +37,7 @@ func GinLimitFlow(MIN_SAFE_TIME, LIMIT_NUMBER, LIMITED_TIME_MILLIS int64) gin.Ha
 				}
 				ctx.String(500, fmt.Sprintf("request is frequently, please waiting for %ds", remainingTime))
 				ctx.Abort()
+				return
 			}
 		}
 		if info, ok := ipMap.Load(ip); ok {
@@ -58,7 +48,11 @@ func GinLimitFlow(MIN_SAFE_TIME, LIMIT_NUMBER, LIMITED_TIME_MILLIS int64) gin.Ha
 				currentTimeMillis := time.Now().UnixMicro()
 				if currentTimeMillis-ipAccessTime <= MIN_SAFE_TIME {
 					limitedIpMap.Store(ip, currentTimeMillis+LIMITED_TIME_MILLIS)
-					ctx.String(500, fmt.Sprintf("request is frequently, please waiting for %ds", LIMITED_TIME_MILLIS))
+					remainingTime := LIMITED_TIME_MILLIS / 1000
+					if LIMITED_TIME_MILLIS%1000 > 0 {
+						remainingTime += 1
+					}
+					ctx.String(500, fmt.Sprintf("request is frequently, please waiting for %ds", remainingTime))
 					ctx.Abort()
 				} else {
 					initIpVisitsNumber(ip)
